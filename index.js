@@ -81,6 +81,6 @@ app.post('/parse-recipe', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Chef Choice API listening on port ${PORT}`);
 });
