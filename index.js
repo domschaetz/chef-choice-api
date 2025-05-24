@@ -221,6 +221,57 @@ app.post('/parse-url', async (req, res) => {
   }
 });
 
+// Image proxy endpoint for authenticated image loading
+app.post('/image-proxy', async (req, res) => {
+  // Basic API key authentication
+  const apiKey = req.headers['x-api-key'];
+  const expectedApiKey = process.env.API_SECRET_KEY || 'chef-choice-mobile-app-2025';
+
+  if (apiKey !== expectedApiKey) {
+    console.log('🚫 Unauthorized API access attempt', { received: apiKey, expected: expectedApiKey });
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { storagePath, authToken } = req.body;
+
+  // Validate request
+  if (!storagePath || !authToken) {
+    return res.status(400).json({ error: 'Missing storagePath or authToken' });
+  }
+
+  console.log('🖼️ Proxying authenticated image request:', storagePath);
+
+  try {
+    // Use Firebase Admin SDK to get the image with proper authentication
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(storagePath);
+
+    // Verify the file exists and user has access
+    const [exists] = await file.exists();
+    if (!exists) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Get the file stream
+    const stream = file.createReadStream();
+
+    // Set appropriate headers
+    const [metadata] = await file.getMetadata();
+    res.set('Content-Type', metadata.contentType || 'image/jpeg');
+    res.set('Content-Length', metadata.size);
+    res.set('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+
+    // Pipe the file to the response
+    stream.pipe(res);
+
+    console.log('✅ Successfully proxied image');
+
+  } catch (error) {
+    console.error('❌ Image proxy error:', error);
+    res.status(500).json({ error: 'Failed to proxy image: ' + error.message });
+  }
+});
+
 // Image upload endpoint for iOS compatibility
 app.post('/upload-image', async (req, res) => {
   console.log('📷 Received image upload request');
