@@ -1,0 +1,25 @@
+// Updated Firebase Storage Rules to fix 403 errors
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow authenticated users to read any recipe image
+    match /recipes/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Deny access to everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// The issue was that the original rules expected:
+// recipes/{userId}/{filename} 
+// 
+// But actual upload paths are:
+// recipes/{filename}
+//
+// This simplified rule allows any authenticated user to access any recipe image,
+// which is appropriate since all users should be able to see recipe images.

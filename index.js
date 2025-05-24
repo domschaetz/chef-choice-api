@@ -472,6 +472,97 @@ app.post('/image-proxy', async (req, res) => {
   console.log('🖼️ === IMAGE PROXY REQUEST END ===');
 });
 
+// Test endpoint to debug auth token and Firebase Storage access
+app.post('/test-auth', async (req, res) => {
+  console.log('🧪 === AUTH TEST REQUEST START ===');
+
+  const { authToken } = req.body;
+
+  if (!authToken) {
+    return res.status(400).json({ error: 'Missing authToken' });
+  }
+
+  console.log('🔑 Testing auth token:', authToken.substring(0, 20) + '...');
+
+  try {
+    // Test 1: Verify the token format
+    console.log('🔍 Token format check...');
+    const tokenParts = authToken.split('.');
+    console.log('📋 Token parts count:', tokenParts.length);
+
+    if (tokenParts.length === 3) {
+      try {
+        const header = JSON.parse(atob(tokenParts[0]));
+        const payload = JSON.parse(atob(tokenParts[1]));
+        console.log('✅ Token header:', header);
+        console.log('✅ Token payload (user info):', {
+          iss: payload.iss,
+          aud: payload.aud,
+          auth_time: payload.auth_time,
+          user_id: payload.user_id,
+          firebase: payload.firebase,
+          exp: payload.exp,
+          iat: payload.iat
+        });
+
+        // Check if token is expired
+        const now = Math.floor(Date.now() / 1000);
+        const isExpired = payload.exp < now;
+        console.log('⏰ Token expired?', isExpired, 'Expires:', new Date(payload.exp * 1000).toISOString());
+
+      } catch (e) {
+        console.log('❌ Failed to decode token parts:', e.message);
+      }
+    }
+
+    // Test 2: Try a simple Firebase Storage REST API call
+    console.log('🔗 Testing Firebase Storage REST API access...');
+    const testPath = 'recipes/1748094052524_cropped-1748094047353.jpg';
+    const encodedPath = encodeURIComponent(testPath);
+    const storageUrl = `https://firebasestorage.googleapis.com/v0/b/chef-choice-60cc3.firebasestorage.app/o/${encodedPath}?alt=media`;
+
+    console.log('📡 Test URL:', storageUrl);
+
+    const storageResponse = await fetch(storageUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Accept': '*/*'
+      }
+    });
+
+    console.log('📥 Firebase Storage test response status:', storageResponse.status);
+    console.log('📥 Firebase Storage test response headers:', [...storageResponse.headers.entries()]);
+
+    if (!storageResponse.ok) {
+      const errorText = await storageResponse.text();
+      console.log('❌ Firebase Storage test error:', errorText);
+
+      return res.json({
+        success: false,
+        tokenValid: tokenParts.length === 3,
+        storageStatus: storageResponse.status,
+        storageError: errorText,
+        message: 'Firebase Storage access failed'
+      });
+    } else {
+      console.log('✅ Firebase Storage access successful!');
+      return res.json({
+        success: true,
+        tokenValid: true,
+        storageStatus: storageResponse.status,
+        message: 'Auth token and Firebase Storage access working correctly'
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Auth test error:', error);
+    return res.status(500).json({ error: 'Auth test failed: ' + error.message });
+  }
+
+  console.log('🧪 === AUTH TEST REQUEST END ===');
+});
+
 // Image upload endpoint for iOS compatibility
 app.post('/upload-image', async (req, res) => {
   console.log('📷 Received image upload request');
