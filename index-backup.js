@@ -241,7 +241,131 @@ app.post('/parse-url', async (req, res) => {
   }
 });
 
-// Image proxy endpoint for authenticated image loading (WORKING VERSION)
+// Image proxy endpoint for authenticated image loading
+app.post('/image-proxy', async (req, res) => {
+  console.log('🖼️ === IMAGE PROXY REQUEST START ===');
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+
+  // Basic API key authentication
+  const apiKey = req.headers['x-api-key'];
+  const expectedApiKey = process.env.API_SECRET_KEY || 'chef-choice-mobile-app-2025';
+
+  if (apiKey !== expectedApiKey) {
+    console.log('🚫 Unauthorized API access attempt', { received: apiKey, expected: expectedApiKey });
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { storagePath, authToken } = req.body;
+
+  // Validate request
+  if (!storagePath || !authToken) {
+    console.log('❌ Missing required fields:', { storagePath: !!storagePath, authToken: !!authToken });
+    return res.status(400).json({ error: 'Missing storagePath or authToken' });
+  }
+
+  console.log('🖼️ Proxying authenticated image request for path:', storagePath);
+  console.log('🔑 Auth token preview:', authToken.substring(0, 20) + '...');
+
+  try {
+    // Check Firebase Admin initialization
+    if (!admin.apps.length) {
+      console.log('❌ Firebase Admin not initialized');
+      return res.status(500).json({ error: 'Firebase Admin not initialized' });
+    }
+
+    console.log('✅ Firebase Admin is initialized');
+
+    // First try to validate the user's auth token
+    console.log('🔐 Validating user auth token...');
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(authToken);
+      console.log('✅ Token valid for user:', decodedToken.uid);
+
+      // Check if the user has access to this file (based on storage path)
+      if (storagePath.includes('recipes/') && !storagePath.includes(`recipes/${decodedToken.uid}/`)) {
+        console.log('🚫 User does not have access to this file path');
+        return res.status(403).json({ error: 'Access denied to this file' });
+      }
+    } catch (tokenError) {
+      console.error('❌ Token validation failed:', tokenError.message);
+      return res.status(401).json({ error: 'Invalid auth token' });
+    }
+
+    // Use Firebase Admin SDK to get the image with proper authentication
+    const bucket = admin.storage().bucket();
+    console.log('📦 Got storage bucket:', bucket.name);
+
+    const file = bucket.file(storagePath);
+    console.log('📁 Created file reference for:', storagePath);
+
+    // Verify the file exists and user has access
+    console.log('🔍 Checking if file exists...');
+    const [exists] = await file.exists();
+    console.log('📂 File exists:', exists);
+
+    if (!exists) {
+      console.log('❌ File not found in storage:', storagePath);
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Get file metadata first
+    console.log('📊 Getting file metadata...');
+    const [metadata] = await file.getMetadata();
+    console.log('📋 File metadata:', {
+      name: metadata.name,
+      size: metadata.size,
+      contentType: metadata.contentType,
+      timeCreated: metadata.timeCreated,
+      updated: metadata.updated
+    });
+
+    // Set appropriate headers before streaming
+    res.set('Content-Type', metadata.contentType || 'image/jpeg');
+    res.set('Content-Length', metadata.size);
+    res.set('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+
+    console.log('📤 Creating read stream...');
+    // Get the file stream
+    const stream = file.createReadStream();
+
+    // Handle stream events
+    stream.on('error', (streamError) => {
+      console.error('❌ Stream error:', streamError);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Stream error: ' + streamError.message });
+      }
+    });
+
+    stream.on('data', (chunk) => {
+      console.log('📦 Streaming chunk of size:', chunk.length);
+    });
+
+    stream.on('end', () => {
+      console.log('✅ Stream ended successfully');
+    });
+
+    // Pipe the file to the response
+    stream.pipe(res);
+
+    console.log('✅ Successfully started proxying image');
+
+  } catch (error) {
+    console.error('❌ Image proxy error - Full details:');
+    console.error('Error message:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to proxy image: ' + error.message });
+    }
+  }
+
+  console.log('🖼️ === IMAGE PROXY REQUEST END ===');
+});
+
+// Image proxy endpoint for authenticated image loading
 app.post('/image-proxy', async (req, res) => {
   console.log('🖼️ === IMAGE PROXY REQUEST START ===');
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
@@ -270,7 +394,7 @@ app.post('/image-proxy', async (req, res) => {
   try {
     // Use Firebase Storage REST API directly with the user's auth token
     // This avoids the need for Firebase Admin SDK service account credentials
-    
+
     console.log('🔗 Building Firebase Storage REST API URL...');
     const encodedPath = encodeURIComponent(storagePath);
     const storageUrl = `https://firebasestorage.googleapis.com/v0/b/chef-choice-60cc3.firebasestorage.app/o/${encodedPath}?alt=media`;
@@ -291,7 +415,7 @@ app.post('/image-proxy', async (req, res) => {
     if (!storageResponse.ok) {
       const errorText = await storageResponse.text();
       console.log('❌ Firebase Storage error response:', errorText);
-      
+
       if (storageResponse.status === 401) {
         return res.status(401).json({ error: 'Authentication failed' });
       } else if (storageResponse.status === 403) {
@@ -306,7 +430,7 @@ app.post('/image-proxy', async (req, res) => {
     // Get content type from Firebase Storage response
     const contentType = storageResponse.headers.get('content-type') || 'image/jpeg';
     const contentLength = storageResponse.headers.get('content-length');
-    
+
     console.log('📋 Image metadata from Firebase:', {
       contentType,
       contentLength,
@@ -321,7 +445,7 @@ app.post('/image-proxy', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
 
     console.log('📤 Streaming image data from Firebase Storage...');
-    
+
     // Stream the response body to the client
     if (storageResponse.body) {
       storageResponse.body.pipe(res);
@@ -339,33 +463,33 @@ app.post('/image-proxy', async (req, res) => {
     console.error('Error code:', error.code);
     console.error('Error stack:', error.stack);
     console.error('Error details:', JSON.stringify(error, null, 2));
-    
+
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to proxy image: ' + error.message });
     }
   }
-  
+
   console.log('🖼️ === IMAGE PROXY REQUEST END ===');
 });
 
 // Test endpoint to debug auth token and Firebase Storage access
 app.post('/test-auth', async (req, res) => {
   console.log('🧪 === AUTH TEST REQUEST START ===');
-  
+
   const { authToken } = req.body;
-  
+
   if (!authToken) {
     return res.status(400).json({ error: 'Missing authToken' });
   }
-  
+
   console.log('🔑 Testing auth token:', authToken.substring(0, 20) + '...');
-  
+
   try {
     // Test 1: Verify the token format
     console.log('🔍 Token format check...');
     const tokenParts = authToken.split('.');
     console.log('📋 Token parts count:', tokenParts.length);
-    
+
     if (tokenParts.length === 3) {
       try {
         const header = JSON.parse(atob(tokenParts[0]));
@@ -380,25 +504,25 @@ app.post('/test-auth', async (req, res) => {
           exp: payload.exp,
           iat: payload.iat
         });
-        
+
         // Check if token is expired
         const now = Math.floor(Date.now() / 1000);
         const isExpired = payload.exp < now;
         console.log('⏰ Token expired?', isExpired, 'Expires:', new Date(payload.exp * 1000).toISOString());
-        
+
       } catch (e) {
         console.log('❌ Failed to decode token parts:', e.message);
       }
     }
-    
+
     // Test 2: Try a simple Firebase Storage REST API call
     console.log('🔗 Testing Firebase Storage REST API access...');
     const testPath = 'recipes/1748094052524_cropped-1748094047353.jpg';
     const encodedPath = encodeURIComponent(testPath);
     const storageUrl = `https://firebasestorage.googleapis.com/v0/b/chef-choice-60cc3.firebasestorage.app/o/${encodedPath}?alt=media`;
-    
+
     console.log('📡 Test URL:', storageUrl);
-    
+
     const storageResponse = await fetch(storageUrl, {
       method: 'GET',
       headers: {
@@ -406,14 +530,14 @@ app.post('/test-auth', async (req, res) => {
         'Accept': '*/*'
       }
     });
-    
+
     console.log('📥 Firebase Storage test response status:', storageResponse.status);
     console.log('📥 Firebase Storage test response headers:', [...storageResponse.headers.entries()]);
-    
+
     if (!storageResponse.ok) {
       const errorText = await storageResponse.text();
       console.log('❌ Firebase Storage test error:', errorText);
-      
+
       return res.json({
         success: false,
         tokenValid: tokenParts.length === 3,
@@ -430,12 +554,12 @@ app.post('/test-auth', async (req, res) => {
         message: 'Auth token and Firebase Storage access working correctly'
       });
     }
-    
+
   } catch (error) {
     console.error('❌ Auth test error:', error);
     return res.status(500).json({ error: 'Auth test failed: ' + error.message });
   }
-  
+
   console.log('🧪 === AUTH TEST REQUEST END ===');
 });
 
