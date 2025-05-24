@@ -76,11 +76,11 @@ app.post('/parse-recipe', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Given plain text, extract structured recipe data as JSON.',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Step 1: Mix ingredients...", "tags": ["dinner", "easy"]}',
         },
         {
           role: 'user',
-          content: `Extract this recipe as JSON with title, ingredients (with quantity and name), steps, and tags:\n\n${text}`,
+          content: `Extract the recipe from this text as JSON with the exact format specified:\n\n${text}`,
         }
       ],
       temperature: 0.4,
@@ -157,11 +157,11 @@ app.post('/parse-url', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data from webpage text as JSON with title, ingredientsByProcessingStep (array with name and items), steps, and tags.',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Step 1: Mix ingredients...", "tags": ["dinner", "easy"]}',
         },
         {
           role: 'user',
-          content: `Extract the recipe from this webpage text as JSON:\n\n${limitedText}`,
+          content: `Extract the recipe from this webpage text as JSON with the exact format specified:\n\n${limitedText}`,
         }
       ],
       temperature: 0.4,
