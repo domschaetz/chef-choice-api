@@ -76,14 +76,14 @@ app.post('/parse-recipe', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. CRITICAL RULES: 1) Keep the ORIGINAL LANGUAGE of the recipe (do not translate). 2) Include ALL ingredients with their EXACT quantities as written. 3) Include ALL cooking instructions. 4) Preserve original measurements, units, and terminology.',
+          content: 'You are a content structure analyzer. Your job is to IDENTIFY and ORGANIZE recipe content, NOT to rewrite or translate anything. Extract the recipe data as JSON: {"title": "exact title as written", "ingredientsByProcessingStep": [{"name": "section name if any", "items": [{"quantity": "exact quantity as written", "name": "exact ingredient name as written"}]}], "steps": "exact cooking instructions as written", "tags": ["category tags"]}. CRITICAL: Copy all text EXACTLY as written - do not change words, measurements, or language. Only organize the content into the correct structure.',
         },
         {
           role: 'user',
-          content: `Extract the recipe from this text as JSON with the exact format specified. PRESERVE THE ORIGINAL LANGUAGE. Include ALL ingredients with exact quantities and ALL cooking steps:\n\n${text}`,
+          content: `Organize this recipe text into structured JSON. Copy all text EXACTLY as written - do not rewrite, translate, or change anything:\n\n${text}`,
         }
       ],
-      temperature: 0.4,
+      temperature: 0.1,
     });
 
     const result = completion.choices[0].message.content;
@@ -178,14 +178,14 @@ app.post('/parse-url', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. CRITICAL RULES: 1) Keep the ORIGINAL LANGUAGE of the recipe (do not translate). 2) Include ALL ingredients with their EXACT quantities as written. 3) Include ALL cooking instructions. 4) Preserve original measurements, units, and terminology.',
+          content: 'You are a content structure analyzer. Your job is to IDENTIFY and ORGANIZE recipe content from webpage text, NOT to rewrite or translate anything. Extract the recipe data as JSON: {"title": "exact title as written", "ingredientsByProcessingStep": [{"name": "section name if any", "items": [{"quantity": "exact quantity as written", "name": "exact ingredient name as written"}]}], "steps": "exact cooking instructions as written", "tags": ["category tags"]}. CRITICAL: Copy all text EXACTLY as written - do not change words, measurements, or language. Only organize the content into the correct structure.',
         },
         {
           role: 'user',
-          content: `Extract the recipe from this webpage text as JSON with the exact format specified. PRESERVE THE ORIGINAL LANGUAGE. Include ALL ingredients with exact quantities and ALL cooking steps:\n\n${limitedText}`,
+          content: `Organize this webpage content into structured recipe JSON. Copy all recipe text EXACTLY as written - do not rewrite, translate, or change anything:\n\n${limitedText}`,
         }
       ],
-      temperature: 0.4,
+      temperature: 0.1,
     });
 
     const result = completion.choices[0].message.content;
