@@ -76,7 +76,7 @@ app.post('/parse-recipe', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Step 1: Mix ingredients...", "tags": ["dinner", "easy"]}',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Mix ingredients in a bowl. Heat pan and cook until done.", "tags": ["dinner", "easy"]}',
         },
         {
           role: 'user',
@@ -157,7 +157,7 @@ app.post('/parse-url', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Step 1: Mix ingredients...", "tags": ["dinner", "easy"]}',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Mix ingredients in a bowl. Heat pan and cook until done.", "tags": ["dinner", "easy"]}',
         },
         {
           role: 'user',
@@ -174,7 +174,9 @@ app.post('/parse-url', async (req, res) => {
     let parsedResult;
     try {
       parsedResult = JSON.parse(result);
+      console.log('✅ Parsed JSON successfully:', JSON.stringify(parsedResult, null, 2));
     } catch (e) {
+      console.log('❌ JSON parsing failed, using fallback:', e.message);
       // If JSON parsing fails, return the raw result
       parsedResult = { title: 'Imported Recipe', steps: result, ingredientsByProcessingStep: [], tags: [] };
     }
