@@ -72,15 +72,15 @@ app.post('/parse-recipe', async (req, res) => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. IMPORTANT: Include ALL cooking instructions and steps in the "steps" field, no matter how long.',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. CRITICAL RULES: 1) Keep the ORIGINAL LANGUAGE of the recipe (do not translate). 2) Include ALL ingredients with their EXACT quantities as written. 3) Include ALL cooking instructions. 4) Preserve original measurements, units, and terminology.',
         },
         {
           role: 'user',
-          content: `Extract the recipe from this text as JSON with the exact format specified. Include ALL cooking steps and instructions:\n\n${text}`,
+          content: `Extract the recipe from this text as JSON with the exact format specified. PRESERVE THE ORIGINAL LANGUAGE. Include ALL ingredients with exact quantities and ALL cooking steps:\n\n${text}`,
         }
       ],
       temperature: 0.4,
@@ -88,7 +88,28 @@ app.post('/parse-recipe', async (req, res) => {
 
     const result = completion.choices[0].message.content;
     console.log('🧠 AI parsed result:', result);
-    res.json({ result });
+
+    // Parse and validate the JSON for consistency with URL endpoint
+    let parsedResult;
+    try {
+      // Try to extract JSON from AI response (sometimes it includes extra text)
+      const jsonMatch = result.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? jsonMatch[0] : result;
+
+      parsedResult = JSON.parse(jsonString);
+      console.log('✅ Parsed JSON successfully:', JSON.stringify(parsedResult, null, 2));
+
+      // Validate required fields
+      if (!parsedResult.title) parsedResult.title = 'Imported Recipe';
+      if (!parsedResult.ingredientsByProcessingStep) parsedResult.ingredientsByProcessingStep = [];
+      if (!parsedResult.steps) parsedResult.steps = result;
+      if (!parsedResult.tags) parsedResult.tags = [];
+
+      res.json({ result: JSON.stringify(parsedResult) });
+    } catch (e) {
+      console.log('❌ JSON parsing failed, using original format:', e.message);
+      res.json({ result });
+    }
   } catch (err) {
     console.error('❌ OpenAI error:', err.response?.data || err.message || err);
     res.status(500).json({ error: 'OpenAI API error' });
@@ -153,15 +174,15 @@ app.post('/parse-url', async (req, res) => {
 
     // Use OpenAI to parse the recipe
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. IMPORTANT: Include ALL cooking instructions and steps in the "steps" field, no matter how long.',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. CRITICAL RULES: 1) Keep the ORIGINAL LANGUAGE of the recipe (do not translate). 2) Include ALL ingredients with their EXACT quantities as written. 3) Include ALL cooking instructions. 4) Preserve original measurements, units, and terminology.',
         },
         {
           role: 'user',
-          content: `Extract the recipe from this webpage text as JSON with the exact format specified. Include ALL cooking steps and instructions:\n\n${limitedText}`,
+          content: `Extract the recipe from this webpage text as JSON with the exact format specified. PRESERVE THE ORIGINAL LANGUAGE. Include ALL ingredients with exact quantities and ALL cooking steps:\n\n${limitedText}`,
         }
       ],
       temperature: 0.4,
@@ -173,10 +194,22 @@ app.post('/parse-url', async (req, res) => {
     // Parse and validate the JSON
     let parsedResult;
     try {
-      parsedResult = JSON.parse(result);
+      // Try to extract JSON from AI response (sometimes it includes extra text)
+      const jsonMatch = result.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? jsonMatch[0] : result;
+
+      parsedResult = JSON.parse(jsonString);
       console.log('✅ Parsed JSON successfully:', JSON.stringify(parsedResult, null, 2));
+
+      // Validate required fields
+      if (!parsedResult.title) parsedResult.title = 'Imported Recipe';
+      if (!parsedResult.ingredientsByProcessingStep) parsedResult.ingredientsByProcessingStep = [];
+      if (!parsedResult.steps) parsedResult.steps = result;
+      if (!parsedResult.tags) parsedResult.tags = [];
+
     } catch (e) {
       console.log('❌ JSON parsing failed, using fallback:', e.message);
+      console.log('Raw AI response:', result);
       // If JSON parsing fails, return the raw result
       parsedResult = { title: 'Imported Recipe', steps: result, ingredientsByProcessingStep: [], tags: [] };
     }
