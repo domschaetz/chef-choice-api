@@ -76,14 +76,14 @@ app.post('/parse-recipe', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a content structure analyzer. Your job is to IDENTIFY and ORGANIZE recipe content, NOT to rewrite or translate anything. Extract the recipe data as JSON: {"title": "exact title as written", "ingredientsByProcessingStep": [{"name": "section name if any", "items": [{"quantity": "exact quantity as written", "name": "exact ingredient name as written"}]}], "steps": "exact cooking instructions as written", "tags": ["category tags"]}. CRITICAL: Copy all text EXACTLY as written - do not change words, measurements, or language. Only organize the content into the correct structure.',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. For OCR text, interpret and clean up the scanned content while preserving the original language. Include ALL ingredients with their quantities and ALL cooking instructions.',
         },
         {
           role: 'user',
-          content: `Organize this recipe text into structured JSON. Copy all text EXACTLY as written - do not rewrite, translate, or change anything:\n\n${text}`,
+          content: `Extract and clean up this OCR recipe text as JSON. Preserve the original language but fix any OCR errors:\n\n${text}`,
         }
       ],
-      temperature: 0.1,
+      temperature: 0.3,
     });
 
     const result = completion.choices[0].message.content;
