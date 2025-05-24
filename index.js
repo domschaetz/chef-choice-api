@@ -49,10 +49,10 @@ app.get('/', (req, res) => {
 app.post('/parse-recipe', async (req, res) => {
   // Basic API key authentication
   const apiKey = req.headers['x-api-key'];
-  const expectedApiKey = process.env.API_SECRET_KEY;
+  const expectedApiKey = process.env.API_SECRET_KEY || 'chef-choice-mobile-app-2025';
 
-  if (!expectedApiKey || apiKey !== expectedApiKey) {
-    console.log('🚫 Unauthorized API access attempt');
+  if (apiKey !== expectedApiKey) {
+    console.log('🚫 Unauthorized API access attempt', { received: apiKey, expected: expectedApiKey });
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -99,10 +99,10 @@ app.post('/parse-recipe', async (req, res) => {
 app.post('/parse-url', async (req, res) => {
   // Basic API key authentication
   const apiKey = req.headers['x-api-key'];
-  const expectedApiKey = process.env.API_SECRET_KEY;
+  const expectedApiKey = process.env.API_SECRET_KEY || 'chef-choice-mobile-app-2025';
 
-  if (!expectedApiKey || apiKey !== expectedApiKey) {
-    console.log('🚫 Unauthorized API access attempt');
+  if (apiKey !== expectedApiKey) {
+    console.log('🚫 Unauthorized API access attempt', { received: apiKey, expected: expectedApiKey });
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
