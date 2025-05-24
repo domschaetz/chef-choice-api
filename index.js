@@ -2,8 +2,22 @@ import express from 'express';
 import cors from 'cors';
 import { OpenAI } from 'openai';
 import dotenv from 'dotenv';
+import admin from 'firebase-admin';
+import fetch from 'node-fetch';
 
 dotenv.config();
+
+// Initialize Firebase Admin SDK with simplified approach
+// For development, we'll use the default credentials or application default credentials
+try {
+  admin.initializeApp({
+    projectId: "chef-choice-60cc3",
+    storageBucket: "chef-choice-60cc3.firebasestorage.app"
+  });
+  console.log('✅ Firebase Admin initialized');
+} catch (error) {
+  console.error('❌ Firebase Admin initialization failed:', error.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -78,6 +92,156 @@ app.post('/parse-recipe', async (req, res) => {
   } catch (err) {
     console.error('❌ OpenAI error:', err.response?.data || err.message || err);
     res.status(500).json({ error: 'OpenAI API error' });
+  }
+});
+
+// URL parsing endpoint
+app.post('/parse-url', async (req, res) => {
+  // Basic API key authentication
+  const apiKey = req.headers['x-api-key'];
+  const expectedApiKey = process.env.API_SECRET_KEY;
+
+  if (!expectedApiKey || apiKey !== expectedApiKey) {
+    console.log('🚫 Unauthorized API access attempt');
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { url } = req.body;
+
+  // Validate request
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'Invalid request: url is required' });
+  }
+
+  // Basic URL validation
+  try {
+    new URL(url);
+  } catch (e) {
+    return res.status(400).json({ error: 'Invalid URL format' });
+  }
+
+  console.log('🌐 Fetching recipe from URL:', url);
+
+  try {
+    // Fetch the webpage
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Chef-Choice-Bot/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      timeout: 10000
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    console.log('📄 Fetched HTML length:', html.length);
+
+    // Extract text content from HTML (basic extraction)
+    const textContent = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Limit text for processing
+    const limitedText = textContent.substring(0, 4000);
+    console.log('📝 Extracted text preview:', limitedText.substring(0, 200));
+
+    // Use OpenAI to parse the recipe
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a recipe extractor. Extract structured recipe data from webpage text as JSON with title, ingredientsByProcessingStep (array with name and items), steps, and tags.',
+        },
+        {
+          role: 'user',
+          content: `Extract the recipe from this webpage text as JSON:\n\n${limitedText}`,
+        }
+      ],
+      temperature: 0.4,
+    });
+
+    const result = completion.choices[0].message.content;
+    console.log('🧠 AI parsed URL result:', result);
+
+    // Parse and validate the JSON
+    let parsedResult;
+    try {
+      parsedResult = JSON.parse(result);
+    } catch (e) {
+      // If JSON parsing fails, return the raw result
+      parsedResult = { title: 'Imported Recipe', steps: result, ingredientsByProcessingStep: [], tags: [] };
+    }
+
+    res.json(parsedResult);
+  } catch (err) {
+    console.error('❌ URL parsing error:', err.message || err);
+    res.status(500).json({ error: 'Failed to fetch or parse recipe from URL: ' + (err.message || 'Unknown error') });
+  }
+});
+
+// Image upload endpoint for iOS compatibility
+app.post('/upload-image', async (req, res) => {
+  console.log('📷 Received image upload request');
+
+  const { imageData, fileName, contentType, userId, recipeId } = req.body;
+
+  // Validate request
+  if (!imageData || !fileName || !contentType || !userId) {
+    return res.status(400).json({ error: 'Missing required fields: imageData, fileName, contentType, userId' });
+  }
+
+  try {
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(imageData, 'base64');
+    console.log('📁 Image buffer size:', imageBuffer.length);
+
+    // Generate upload path
+    const timestamp = Date.now();
+    const uploadPath = `recipes/${userId}/${recipeId || timestamp}_${fileName}`;
+    console.log('📤 Upload path:', uploadPath);
+
+    // Get Firebase Storage bucket
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(uploadPath);
+
+    // Upload the file
+    await file.save(imageBuffer, {
+      metadata: {
+        contentType: contentType,
+        metadata: {
+          uploadedBy: userId,
+          uploadedAt: new Date().toISOString()
+        }
+      }
+    });
+
+    console.log('✅ File uploaded successfully');
+
+    // Make the file publicly readable
+    await file.makePublic();
+    console.log('🌐 File made public');
+
+    // Get the download URL
+    const downloadURL = `https://storage.googleapis.com/${bucket.name}/${uploadPath}`;
+
+    console.log('🔗 Download URL:', downloadURL);
+
+    res.json({
+      success: true,
+      downloadURL: downloadURL,
+      uploadPath: uploadPath
+    });
+
+  } catch (error) {
+    console.error('❌ Image upload error:', error);
+    res.status(500).json({ error: 'Failed to upload image: ' + error.message });
   }
 });
 
