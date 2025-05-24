@@ -63,9 +63,9 @@ app.post('/parse-recipe', async (req, res) => {
     return res.status(400).json({ error: 'Invalid request: text is required' });
   }
 
-  // Rate limiting: max 5000 characters
-  if (text.length > 5000) {
-    return res.status(400).json({ error: 'Text too long. Maximum 5000 characters allowed.' });
+  // Rate limiting: max 15000 characters
+  if (text.length > 15000) {
+    return res.status(400).json({ error: 'Text too long. Maximum 15000 characters allowed.' });
   }
 
   console.log('📥 Received text for parsing:', text.slice(0, 100)); // preview first 100 chars
@@ -76,11 +76,11 @@ app.post('/parse-recipe', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Mix ingredients in a bowl. Heat pan and cook until done.", "tags": ["dinner", "easy"]}',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. IMPORTANT: Include ALL cooking instructions and steps in the "steps" field, no matter how long.',
         },
         {
           role: 'user',
-          content: `Extract the recipe from this text as JSON with the exact format specified:\n\n${text}`,
+          content: `Extract the recipe from this text as JSON with the exact format specified. Include ALL cooking steps and instructions:\n\n${text}`,
         }
       ],
       temperature: 0.4,
@@ -147,8 +147,8 @@ app.post('/parse-url', async (req, res) => {
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Limit text for processing
-    const limitedText = textContent.substring(0, 4000);
+    // Limit text for processing (increased for longer recipes)
+    const limitedText = textContent.substring(0, 12000);
     console.log('📝 Extracted text preview:', limitedText.substring(0, 200));
 
     // Use OpenAI to parse the recipe
@@ -157,11 +157,11 @@ app.post('/parse-url', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Mix ingredients in a bowl. Heat pan and cook until done.", "tags": ["dinner", "easy"]}',
+          content: 'You are a recipe extractor. Extract structured recipe data as JSON with this exact format: {"title": "Recipe Name", "ingredientsByProcessingStep": [{"name": "Ingredients", "items": [{"quantity": "1 cup", "name": "flour"}]}], "steps": "Complete cooking instructions with all steps and details", "tags": ["dinner", "easy"]}. IMPORTANT: Include ALL cooking instructions and steps in the "steps" field, no matter how long.',
         },
         {
           role: 'user',
-          content: `Extract the recipe from this webpage text as JSON with the exact format specified:\n\n${limitedText}`,
+          content: `Extract the recipe from this webpage text as JSON with the exact format specified. Include ALL cooking steps and instructions:\n\n${limitedText}`,
         }
       ],
       temperature: 0.4,
