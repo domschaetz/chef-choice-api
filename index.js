@@ -223,6 +223,10 @@ app.post('/parse-url', async (req, res) => {
 
 // Image proxy endpoint for authenticated image loading
 app.post('/image-proxy', async (req, res) => {
+  console.log('🖼️ === IMAGE PROXY REQUEST START ===');
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+
   // Basic API key authentication
   const apiKey = req.headers['x-api-key'];
   const expectedApiKey = process.env.API_SECRET_KEY || 'chef-choice-mobile-app-2025';
@@ -236,40 +240,93 @@ app.post('/image-proxy', async (req, res) => {
 
   // Validate request
   if (!storagePath || !authToken) {
+    console.log('❌ Missing required fields:', { storagePath: !!storagePath, authToken: !!authToken });
     return res.status(400).json({ error: 'Missing storagePath or authToken' });
   }
 
-  console.log('🖼️ Proxying authenticated image request:', storagePath);
+  console.log('🖼️ Proxying authenticated image request for path:', storagePath);
+  console.log('🔑 Auth token preview:', authToken.substring(0, 20) + '...');
 
   try {
+    // Check Firebase Admin initialization
+    if (!admin.apps.length) {
+      console.log('❌ Firebase Admin not initialized');
+      return res.status(500).json({ error: 'Firebase Admin not initialized' });
+    }
+
+    console.log('✅ Firebase Admin is initialized');
+
     // Use Firebase Admin SDK to get the image with proper authentication
     const bucket = admin.storage().bucket();
+    console.log('📦 Got storage bucket:', bucket.name);
+
     const file = bucket.file(storagePath);
+    console.log('📁 Created file reference for:', storagePath);
 
     // Verify the file exists and user has access
+    console.log('🔍 Checking if file exists...');
     const [exists] = await file.exists();
+    console.log('📂 File exists:', exists);
+
     if (!exists) {
+      console.log('❌ File not found in storage:', storagePath);
       return res.status(404).json({ error: 'Image not found' });
     }
 
-    // Get the file stream
-    const stream = file.createReadStream();
-
-    // Set appropriate headers
+    // Get file metadata first
+    console.log('📊 Getting file metadata...');
     const [metadata] = await file.getMetadata();
+    console.log('📋 File metadata:', {
+      name: metadata.name,
+      size: metadata.size,
+      contentType: metadata.contentType,
+      timeCreated: metadata.timeCreated,
+      updated: metadata.updated
+    });
+
+    // Set appropriate headers before streaming
     res.set('Content-Type', metadata.contentType || 'image/jpeg');
     res.set('Content-Length', metadata.size);
     res.set('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
 
+    console.log('📤 Creating read stream...');
+    // Get the file stream
+    const stream = file.createReadStream();
+
+    // Handle stream events
+    stream.on('error', (streamError) => {
+      console.error('❌ Stream error:', streamError);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Stream error: ' + streamError.message });
+      }
+    });
+
+    stream.on('data', (chunk) => {
+      console.log('📦 Streaming chunk of size:', chunk.length);
+    });
+
+    stream.on('end', () => {
+      console.log('✅ Stream ended successfully');
+    });
+
     // Pipe the file to the response
     stream.pipe(res);
 
-    console.log('✅ Successfully proxied image');
+    console.log('✅ Successfully started proxying image');
 
   } catch (error) {
-    console.error('❌ Image proxy error:', error);
-    res.status(500).json({ error: 'Failed to proxy image: ' + error.message });
+    console.error('❌ Image proxy error - Full details:');
+    console.error('Error message:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to proxy image: ' + error.message });
+    }
   }
+
+  console.log('🖼️ === IMAGE PROXY REQUEST END ===');
 });
 
 // Image upload endpoint for iOS compatibility
